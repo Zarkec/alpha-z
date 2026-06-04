@@ -89,9 +89,30 @@ input {
   min-height: 0;
   padding: 16px;
   overflow: auto;
+  scrollbar-color: #314259 transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   border: 1px solid #263244;
   border-radius: 8px;
   background: #111823;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid #111823;
+  border-radius: 999px;
+  background: #314259;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #4b6486;
 }
 
 .upload-zone {
@@ -151,6 +172,55 @@ input {
   background: #2a1017;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.generator-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #263244;
+  border-radius: 8px;
+  background: #0d131d;
+}
+
+.generator-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #f1f6ff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.generator-panel h2 .codicon {
+  color: #58a6ff;
+  font-size: 15px;
+}
+
+.generator-panel .upload-zone {
+  min-height: 104px;
+  padding: 14px;
+}
+
+.generator-size {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: #91a2ba;
+  font-size: 13px;
+}
+
+.generator-size select {
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid #33445c;
+  border-radius: 6px;
+  color: #f1f6ff;
+  background: #111823;
 }
 
 .file-info {
@@ -235,22 +305,42 @@ input {
   accent-color: #1f6feb;
 }
 
-.primary-button {
+.primary-button,
+.secondary-button,
+.ghost-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
   min-height: 42px;
+  padding: 0 12px;
   border: 0;
   border-radius: 6px;
   color: #fff;
-  background: #1f6feb;
   font-weight: 700;
   cursor: pointer;
 }
 
-.primary-button .codicon {
+.primary-button {
+  background: #1f6feb;
+}
+
+.secondary-button {
+  background: #238636;
+}
+
+.ghost-button {
+  min-height: 34px;
+  border: 1px solid #33445c;
+  color: #c7d2e2;
+  background: transparent;
+  font-size: 13px;
+}
+
+.primary-button .codicon,
+.secondary-button .codicon,
+.ghost-button .codicon {
   font-size: 16px;
 }
 
@@ -258,7 +348,18 @@ input {
   background: #388bfd;
 }
 
+.secondary-button:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: #58a6ff;
+  color: #f1f6ff;
+}
+
 .primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled,
 input:disabled {
   cursor: not-allowed;
   opacity: 0.5;

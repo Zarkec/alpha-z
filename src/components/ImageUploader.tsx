@@ -3,6 +3,10 @@ import { useRef, useState } from 'react'
 type ImageUploaderProps = {
   onImageLoaded: (image: HTMLImageElement, fileName: string) => void
   onError: (message: string) => void
+  label?: string
+  title?: string
+  helper?: string
+  iconClass?: string
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -11,7 +15,14 @@ function isAcceptedImage(file: File): boolean {
   return ACCEPTED_TYPES.includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name)
 }
 
-export function ImageUploader({ onImageLoaded, onError }: ImageUploaderProps) {
+export function ImageUploader({
+  onImageLoaded,
+  onError,
+  label = '图片',
+  title = '拖入或选择图片',
+  helper = 'jpg, jpeg, png, webp',
+  iconClass = 'codicon-file-media',
+}: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -67,11 +78,11 @@ export function ImageUploader({ onImageLoaded, onError }: ImageUploaderProps) {
         onChange={(event) => handleFiles(event.currentTarget.files)}
       />
       <span className="upload-label">
-        <span className="codicon codicon-file-media" aria-hidden="true" />
-        图片
+        <span className={`codicon ${iconClass}`} aria-hidden="true" />
+        {label}
       </span>
-      <strong>拖入或选择图片</strong>
-      <small>jpg, jpeg, png, webp</small>
+      <strong>{title}</strong>
+      <small>{helper}</small>
     </section>
   )
 }
