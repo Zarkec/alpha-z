@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CubeLUT } from '../core/cubeParser'
-import { applyLUTToImageData } from '../core/lut3d'
+import { WebGLLutRenderer } from '../core/webglLutRenderer'
 
 const MAX_PREVIEW_EDGE = 2048
 
@@ -22,6 +22,21 @@ type DisplaySize = {
   width: number
   height: number
 }
+
+type WorkerResultMessage = {
+  type: 'result'
+  jobId: number
+  exportImageData: ImageData
+  previewImageData?: ImageData
+}
+
+type WorkerErrorMessage = {
+  type: 'error'
+  jobId?: number
+  message: string
+}
+
+type WorkerMessage = WorkerResultMessage | WorkerErrorMessage | { type: 'ready' }
 
 function getScaledSize(width: number, height: number): { width: number; height: number } {
   const maxEdge = Math.max(width, height)
@@ -55,12 +70,28 @@ function prepareImageData(image: HTMLImageElement): PreparedImage {
   }
 }
 
+function drawImageDataToCanvas(canvas: HTMLCanvasElement, imageData: ImageData): void {
+  canvas.width = imageData.width
+  canvas.height = imageData.height
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('无法初始化 Canvas 2D 上下文。')
+  }
+
+  context.putImageData(imageData, 0, 0)
+}
+
 export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasReady }: PreviewCanvasProps) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const rendererRef = useRef<WebGLLutRenderer | null>(null)
+  const workerRef = useRef<Worker | null>(null)
+  const latestJobIdRef = useRef(0)
   const [preparedImage, setPreparedImage] = useState<PreparedImage | null>(null)
   const [displaySize, setDisplaySize] = useState<DisplaySize | null>(null)
+  const [webglEnabled, setWebglEnabled] = useState(false)
 
   useEffect(() => {
     exportCanvasRef.current = document.createElement('canvas')
@@ -72,6 +103,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     if (!image) {
       setPreparedImage(null)
       setDisplaySize(null)
+      setWebglEnabled(false)
       return
     }
 
@@ -120,59 +152,90 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     return () => observer.disconnect()
   }, [preparedImage])
 
-  const safeIntensity = useMemo(() => Math.min(1, Math.max(0, intensity / 100)), [intensity])
-
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !preparedImage) {
+    const exportCanvas = exportCanvasRef.current
+    if (!canvas || !exportCanvas || !preparedImage) {
       return
     }
 
-    let frameId = 0
+    rendererRef.current?.dispose()
+    rendererRef.current = null
+    workerRef.current?.terminate()
+    workerRef.current = null
+    setWebglEnabled(false)
 
-    frameId = requestAnimationFrame(() => {
-      const context = canvas.getContext('2d')
-      const exportCanvas = exportCanvasRef.current
-      const exportContext = exportCanvas?.getContext('2d')
-      if (!context || !exportCanvas || !exportContext) {
-        return
+    drawImageDataToCanvas(exportCanvas, preparedImage.imageData)
+
+    try {
+      const renderer = new WebGLLutRenderer(canvas)
+      renderer.setImage(preparedImage.imageData)
+      renderer.setLut(lut)
+      renderer.render(Math.min(1, Math.max(0, intensity / 100)), compareMode)
+      rendererRef.current = renderer
+      setWebglEnabled(true)
+    } catch {
+      drawImageDataToCanvas(canvas, preparedImage.imageData)
+      setWebglEnabled(false)
+    }
+
+    const worker = new Worker(new URL('../workers/lutWorker.ts', import.meta.url), { type: 'module' })
+    workerRef.current = worker
+    worker.postMessage({ type: 'init', imageData: preparedImage.imageData })
+
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+      const message = event.data
+
+      if (message.type === 'result') {
+        if (message.jobId !== latestJobIdRef.current) {
+          return
+        }
+
+        drawImageDataToCanvas(exportCanvas, message.exportImageData)
+
+        if (!rendererRef.current && message.previewImageData) {
+          drawImageDataToCanvas(canvas, message.previewImageData)
+        }
       }
+    }
 
-      canvas.width = preparedImage.width
-      canvas.height = preparedImage.height
-      exportCanvas.width = preparedImage.width
-      exportCanvas.height = preparedImage.height
-
-      const filteredImage = lut
-        ? applyLUTToImageData(preparedImage.imageData, lut, safeIntensity)
-        : preparedImage.imageData
-
-      exportContext.putImageData(filteredImage, 0, 0)
-
-      if (!compareMode || !lut) {
-        context.putImageData(filteredImage, 0, 0)
-        return
+    return () => {
+      worker.terminate()
+      if (workerRef.current === worker) {
+        workerRef.current = null
       }
+      rendererRef.current?.dispose()
+      rendererRef.current = null
+    }
+  }, [preparedImage])
 
-      context.putImageData(filteredImage, 0, 0)
+  const safeIntensity = useMemo(() => Math.min(1, Math.max(0, intensity / 100)), [intensity])
 
-      const splitX = Math.floor(preparedImage.width / 2)
-      const originalLeft = context.createImageData(splitX, preparedImage.height)
-      const source = preparedImage.imageData.data
-      const target = originalLeft.data
+  useEffect(() => {
+    if (!preparedImage) {
+      return
+    }
 
-      for (let y = 0; y < preparedImage.height; y += 1) {
-        const sourceOffset = y * preparedImage.width * 4
-        const targetOffset = y * splitX * 4
-        target.set(source.subarray(sourceOffset, sourceOffset + splitX * 4), targetOffset)
-      }
+    const renderer = rendererRef.current
+    if (renderer) {
+      renderer.setLut(lut)
+      renderer.render(safeIntensity, compareMode)
+    }
 
-      context.putImageData(originalLeft, 0, 0)
-      context.fillStyle = 'rgba(255, 255, 255, 0.9)'
-      context.fillRect(splitX - 1, 0, 2, preparedImage.height)
+    const worker = workerRef.current
+    if (!worker) {
+      return
+    }
+
+    latestJobIdRef.current += 1
+    worker.postMessage({
+      type: 'process',
+      jobId: latestJobIdRef.current,
+      lut,
+      intensity: safeIntensity,
+      compareMode,
+      includePreview: !renderer,
     })
-
-    return () => cancelAnimationFrame(frameId)
   }, [preparedImage, lut, safeIntensity, compareMode])
 
   if (!image) {
@@ -194,7 +257,8 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
           height: displaySize?.height ?? 0,
         }}
       >
-        <canvas ref={canvasRef} aria-label="Image preview canvas" />
+        <canvas ref={canvasRef} aria-label="图片预览画布" />
+        <div className="render-badge">{webglEnabled ? 'WebGL2' : 'Worker'}</div>
         {compareMode && lut ? (
           <div className="compare-labels">
             <span>原图</span>

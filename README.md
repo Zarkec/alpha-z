@@ -14,6 +14,8 @@ alpha-z 是一个浏览器端 LUT 滤镜编辑器。用户可以在本地加载�
 - 支持原图 / 滤镜效果对比。
 - 支持从当前处理结果导出 PNG。
 - 支持上传“原图 + 滤镜效果图”，反推并生成近似 `.cube` 文件。
+- 预览优先使用 WebGL2 进行 GPU 加速，WebGL2 不可用时回退到 Web Worker 后台处理。
+- 导出图像由 Web Worker 后台生成，避免拖动强度滑块时阻塞主线程。
 - 大图预览会按最大边 2048px 缩放，生成 LUT 时会按最大边 1024px 采样。
 
 ## 从图片生成 CUBE
@@ -49,6 +51,8 @@ src/core/cubeSerializer.ts   .cube 序列化输出
 src/core/interpolate.ts      3D LUT 三线性插值
 src/core/lut3d.ts            ImageData LUT 应用
 src/core/lutGenerator.ts     根据原图和效果图生成近似 LUT
+src/core/webglLutRenderer.ts WebGL2 LUT 预览渲染
+src/workers/lutWorker.ts     后台 LUT 像素处理和导出图生成
 src/components/              React UI 组件
 src/App.tsx                  应用组合
 src/styles.css               基础界面样式
@@ -56,8 +60,8 @@ src/styles.css               基础界面样式
 
 ## 后续计划
 
-- 将 CPU 像素处理迁移到 Web Worker。
-- 增加 WebGL 或 WebGPU 加速。
+- 增加更高精度的 3D LUT 纹理采样。
+- 评估 WebGPU 渲染路径。
 - 增加可拖动的对比分割线。
 - 增加 JPEG/WebP 导出选项。
 - 增加 LUT 元数据展示和更详细的校验信息。
