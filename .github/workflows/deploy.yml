@@ -31,10 +31,12 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build -- --mode github-pages
+        run: npm run build -- --base=/alpha-z/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
