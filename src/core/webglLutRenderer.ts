@@ -19,6 +19,7 @@ uniform float u_lutSize;
 uniform float u_intensity;
 uniform bool u_hasLut;
 uniform bool u_compareMode;
+uniform float u_comparePosition;
 uniform vec2 u_resolution;
 
 in vec2 v_texCoord;
@@ -62,11 +63,11 @@ void main() {
   vec3 mapped = u_hasLut ? sampleLut(original.rgb) : original.rgb;
   vec3 filtered = mix(original.rgb, mapped, u_intensity);
 
-  if (u_compareMode && v_texCoord.x < 0.5) {
+  if (u_compareMode && v_texCoord.x < u_comparePosition) {
     filtered = original.rgb;
   }
 
-  if (u_compareMode && abs(v_texCoord.x - 0.5) < 1.0 / u_resolution.x) {
+  if (u_compareMode && abs(v_texCoord.x - u_comparePosition) < 1.0 / u_resolution.x) {
     outColor = vec4(1.0, 1.0, 1.0, original.a);
     return;
   }
@@ -141,6 +142,7 @@ export class WebGLLutRenderer {
     intensity: WebGLUniformLocation
     hasLut: WebGLUniformLocation
     compareMode: WebGLUniformLocation
+    comparePosition: WebGLUniformLocation
     resolution: WebGLUniformLocation
   }
 
@@ -186,6 +188,7 @@ export class WebGLLutRenderer {
       intensity: this.getUniformLocation('u_intensity'),
       hasLut: this.getUniformLocation('u_hasLut'),
       compareMode: this.getUniformLocation('u_compareMode'),
+      comparePosition: this.getUniformLocation('u_comparePosition'),
       resolution: this.getUniformLocation('u_resolution'),
     }
   }
@@ -232,7 +235,7 @@ export class WebGLLutRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
   }
 
-  render(intensity: number, compareMode: boolean): void {
+  render(intensity: number, compareMode: boolean, comparePosition: number): void {
     const gl = this.gl
     gl.viewport(0, 0, this.canvas.width, this.canvas.height)
     gl.useProgram(this.program)
@@ -250,6 +253,7 @@ export class WebGLLutRenderer {
     gl.uniform1f(this.uniformLocations.intensity, intensity)
     gl.uniform1i(this.uniformLocations.hasLut, this.hasLut ? 1 : 0)
     gl.uniform1i(this.uniformLocations.compareMode, compareMode && this.hasLut ? 1 : 0)
+    gl.uniform1f(this.uniformLocations.comparePosition, Math.min(1, Math.max(0, comparePosition)))
     gl.uniform2f(this.uniformLocations.resolution, this.canvas.width, this.canvas.height)
 
     gl.drawArrays(gl.TRIANGLES, 0, 6)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { CubeLUT } from '../core/cubeParser'
 import { WebGLLutRenderer } from '../core/webglLutRenderer'
 
@@ -37,6 +37,15 @@ type WorkerErrorMessage = {
 }
 
 type WorkerMessage = WorkerResultMessage | WorkerErrorMessage | { type: 'ready' }
+
+type WorkerRequestCache = {
+  preparedImage: PreparedImage
+  lut: CubeLUT | null
+  intensity: number
+  compareMode: boolean
+  comparePosition: number
+  includePreview: boolean
+}
 
 function getScaledSize(width: number, height: number): { width: number; height: number } {
   const maxEdge = Math.max(width, height)
@@ -84,14 +93,17 @@ function drawImageDataToCanvas(canvas: HTMLCanvasElement, imageData: ImageData):
 
 export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasReady }: PreviewCanvasProps) {
   const shellRef = useRef<HTMLDivElement | null>(null)
+  const frameRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const rendererRef = useRef<WebGLLutRenderer | null>(null)
   const workerRef = useRef<Worker | null>(null)
   const latestJobIdRef = useRef(0)
+  const lastWorkerRequestRef = useRef<WorkerRequestCache | null>(null)
   const [preparedImage, setPreparedImage] = useState<PreparedImage | null>(null)
   const [displaySize, setDisplaySize] = useState<DisplaySize | null>(null)
   const [webglEnabled, setWebglEnabled] = useState(false)
+  const [comparePosition, setComparePosition] = useState(0.5)
 
   useEffect(() => {
     exportCanvasRef.current = document.createElement('canvas')
@@ -163,6 +175,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     rendererRef.current = null
     workerRef.current?.terminate()
     workerRef.current = null
+    lastWorkerRequestRef.current = null
     setWebglEnabled(false)
 
     drawImageDataToCanvas(exportCanvas, preparedImage.imageData)
@@ -171,7 +184,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
       const renderer = new WebGLLutRenderer(canvas)
       renderer.setImage(preparedImage.imageData)
       renderer.setLut(lut)
-      renderer.render(Math.min(1, Math.max(0, intensity / 100)), compareMode)
+      renderer.render(Math.min(1, Math.max(0, intensity / 100)), compareMode, comparePosition)
       rendererRef.current = renderer
       setWebglEnabled(true)
     } catch {
@@ -211,6 +224,32 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
 
   const safeIntensity = useMemo(() => Math.min(1, Math.max(0, intensity / 100)), [intensity])
 
+  const updateComparePosition = (event: PointerEvent | ReactPointerEvent<HTMLButtonElement>) => {
+    const frame = frameRef.current
+    if (!frame) {
+      return
+    }
+
+    const bounds = frame.getBoundingClientRect()
+    const nextPosition = (event.clientX - bounds.left) / bounds.width
+    setComparePosition(Math.min(0.98, Math.max(0.02, nextPosition)))
+  }
+
+  const startCompareDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    updateComparePosition(event)
+
+    const handlePointerMove = (moveEvent: PointerEvent) => updateComparePosition(moveEvent)
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }
+
   useEffect(() => {
     if (!preparedImage) {
       return
@@ -219,7 +258,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     const renderer = rendererRef.current
     if (renderer) {
       renderer.setLut(lut)
-      renderer.render(safeIntensity, compareMode)
+      renderer.render(safeIntensity, compareMode, comparePosition)
     }
 
     const worker = workerRef.current
@@ -227,16 +266,41 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
       return
     }
 
+    const includePreview = !renderer
+    const lastWorkerRequest = lastWorkerRequestRef.current
+    const exportUnchanged =
+      lastWorkerRequest?.preparedImage === preparedImage &&
+      lastWorkerRequest.lut === lut &&
+      lastWorkerRequest.intensity === safeIntensity
+    const previewUnchanged =
+      !includePreview ||
+      (lastWorkerRequest?.includePreview === includePreview &&
+        lastWorkerRequest.compareMode === compareMode &&
+        lastWorkerRequest.comparePosition === comparePosition)
+
+    if (exportUnchanged && previewUnchanged) {
+      return
+    }
+
     latestJobIdRef.current += 1
+    lastWorkerRequestRef.current = {
+      preparedImage,
+      lut,
+      intensity: safeIntensity,
+      compareMode,
+      comparePosition,
+      includePreview,
+    }
     worker.postMessage({
       type: 'process',
       jobId: latestJobIdRef.current,
       lut,
       intensity: safeIntensity,
       compareMode,
-      includePreview: !renderer,
+      comparePosition,
+      includePreview,
     })
-  }, [preparedImage, lut, safeIntensity, compareMode])
+  }, [preparedImage, lut, safeIntensity, compareMode, comparePosition])
 
   if (!image) {
     return (
@@ -251,6 +315,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
   return (
     <div ref={shellRef} className="canvas-shell">
       <div
+        ref={frameRef}
         className="canvas-frame"
         style={{
           width: displaySize?.width ?? 0,
@@ -260,10 +325,24 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
         <canvas ref={canvasRef} aria-label="图片预览画布" />
         <div className="render-badge">{webglEnabled ? 'WebGL2' : 'Worker'}</div>
         {compareMode && lut ? (
-          <div className="compare-labels">
-            <span>原图</span>
-            <span>滤镜</span>
-          </div>
+          <>
+            <div className="compare-labels">
+              <span>原图</span>
+              <span>滤镜</span>
+            </div>
+            <button
+              type="button"
+              className="compare-handle"
+              style={{ left: `${comparePosition * 100}%` }}
+              aria-label="拖动调整原图和滤镜效果的对比位置"
+              onPointerDown={startCompareDrag}
+            >
+              <span className="compare-handle-knob" aria-hidden="true">
+                <span className="codicon codicon-triangle-left" />
+                <span className="codicon codicon-triangle-right" />
+              </span>
+            </button>
+          </>
         ) : null}
       </div>
     </div>

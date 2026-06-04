@@ -12,6 +12,7 @@ type ProcessMessage = {
   lut: CubeLUT | null
   intensity: number
   compareMode: boolean
+  comparePosition: number
   includePreview: boolean
 }
 
@@ -39,9 +40,9 @@ function cloneImageData(imageData: ImageData): ImageData {
   return new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height)
 }
 
-function createComparePreview(source: ImageData, filtered: ImageData): ImageData {
+function createComparePreview(source: ImageData, filtered: ImageData, comparePosition: number): ImageData {
   const preview = cloneImageData(filtered)
-  const splitX = Math.floor(preview.width / 2)
+  const splitX = Math.min(preview.width - 1, Math.floor(preview.width * Math.min(1, Math.max(0, comparePosition))))
   const sourceData = source.data
   const previewData = preview.data
 
@@ -91,7 +92,7 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
 
     const previewImageData =
       message.includePreview && message.compareMode && message.lut
-        ? createComparePreview(sourceImageData, exportImageData)
+        ? createComparePreview(sourceImageData, exportImageData, message.comparePosition)
         : message.includePreview
           ? cloneImageData(exportImageData)
           : undefined
