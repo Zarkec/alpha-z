@@ -128,6 +128,7 @@ function App() {
           <ImageUploader
             label="原图"
             title="拖入或选择原图"
+            fileName={imageName || undefined}
             onImageLoaded={(loadedImage, fileName) => {
               setImage(loadedImage)
               setImageName(fileName)
@@ -160,6 +161,8 @@ function App() {
           {activeTab === 'preview' ? (
             <>
               <LutUploader
+                fileName={lutName || undefined}
+                lutSize={lut?.size}
                 onLutLoaded={(loadedLut, fileName) => {
                   setLut(loadedLut)
                   setLutName(fileName)
@@ -168,34 +171,6 @@ function App() {
                 }}
                 onError={setError}
               />
-
-              <div className="file-info">
-                <div>
-                  <span>
-                    <span className="codicon codicon-file-media" aria-hidden="true" />
-                    原图
-                  </span>
-                  <strong title={imageName || undefined}>{imageName || '未加载'}</strong>
-                </div>
-                <div>
-                  <span>
-                    <span className="codicon codicon-symbol-color" aria-hidden="true" />
-                    LUT
-                  </span>
-                  <strong title={lutName || undefined}>{lutName || '未加载'}</strong>
-                </div>
-                {lut ? (
-                  <div>
-                    <span>
-                      <span className="codicon codicon-settings-gear" aria-hidden="true" />
-                      LUT 尺寸
-                    </span>
-                    <strong>
-                      {lut.size} x {lut.size} x {lut.size}
-                    </strong>
-                  </div>
-                ) : null}
-              </div>
 
               <IntensitySlider value={intensity} onChange={setIntensity} disabled={!image || !lut} />
 
@@ -221,6 +196,7 @@ function App() {
                 title="拖入或选择滤镜效果图"
                 helper="需与原图为同一画面"
                 iconClass="codicon-preview"
+                fileName={filteredReferenceName || undefined}
                 onImageLoaded={(loadedImage, fileName) => {
                   setFilteredReferenceImage(loadedImage)
                   setFilteredReferenceName(fileName)

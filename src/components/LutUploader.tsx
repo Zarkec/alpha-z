@@ -4,9 +4,11 @@ import { parseCube, type CubeLUT } from '../core/cubeParser'
 type LutUploaderProps = {
   onLutLoaded: (lut: CubeLUT, fileName: string) => void
   onError: (message: string) => void
+  fileName?: string
+  lutSize?: number
 }
 
-export function LutUploader({ onLutLoaded, onError }: LutUploaderProps) {
+export function LutUploader({ onLutLoaded, onError, fileName, lutSize }: LutUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -59,8 +61,21 @@ export function LutUploader({ onLutLoaded, onError }: LutUploaderProps) {
         <span className="codicon codicon-symbol-color" aria-hidden="true" />
         LUT
       </span>
-      <strong>拖入或选择 .cube 文件</strong>
-      <small>3D LUT，本地处理</small>
+      {fileName ? (
+        <>
+          <strong className="upload-filename" title={fileName}>{fileName}</strong>
+          <small>
+            {lutSize ? `${lutSize} x ${lutSize} x ${lutSize}` : ''}
+            {lutSize ? ' · ' : ''}
+            点击重新选择
+          </small>
+        </>
+      ) : (
+        <>
+          <strong>拖入或选择 .cube 文件</strong>
+          <small>3D LUT，本地处理</small>
+        </>
+      )}
     </section>
   )
 }

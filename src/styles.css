@@ -223,6 +223,7 @@ select {
   border-radius: 0;
   background: transparent;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
 
 .upload-zone input {
@@ -233,6 +234,12 @@ select {
   color: var(--ink);
   font-size: 14px;
   font-weight: 700;
+}
+
+.upload-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .upload-zone small,
@@ -261,6 +268,12 @@ select {
 .upload-zone:hover {
   border-color: var(--ink-blue);
   background: rgba(58, 90, 122, 0.04);
+}
+
+.upload-zone.is-dragging {
+  border-color: var(--accent);
+  background: rgba(171, 131, 84, 0.08);
+  transform: scale(1.01);
 }
 
 /* ── Error message ── */

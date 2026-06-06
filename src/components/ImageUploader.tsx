@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 type ImageUploaderProps = {
   onImageLoaded: (image: HTMLImageElement, fileName: string) => void
   onError: (message: string) => void
+  fileName?: string
   label?: string
   title?: string
   helper?: string
@@ -18,6 +19,7 @@ function isAcceptedImage(file: File): boolean {
 export function ImageUploader({
   onImageLoaded,
   onError,
+  fileName,
   label = '图片',
   title = '拖入或选择图片',
   helper = 'jpg, jpeg, png, webp',
@@ -81,8 +83,17 @@ export function ImageUploader({
         <span className={`codicon ${iconClass}`} aria-hidden="true" />
         {label}
       </span>
-      <strong>{title}</strong>
-      <small>{helper}</small>
+      {fileName ? (
+        <>
+          <strong className="upload-filename" title={fileName}>{fileName}</strong>
+          <small>点击重新选择</small>
+        </>
+      ) : (
+        <>
+          <strong>{title}</strong>
+          <small>{helper}</small>
+        </>
+      )}
     </section>
   )
 }
