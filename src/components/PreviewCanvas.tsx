@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { CubeLUT } from '../core/cubeParser'
 import { WebGLLutRenderer } from '../core/webglLutRenderer'
 
 const MAX_PREVIEW_EDGE = 2048
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+function isAcceptedImage(file: File): boolean {
+  return ACCEPTED_TYPES.includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name)
+}
 
 type PreviewCanvasProps = {
   image: HTMLImageElement | null
@@ -10,6 +15,9 @@ type PreviewCanvasProps = {
   intensity: number
   compareMode: boolean
   onCanvasReady: (canvas: HTMLCanvasElement | null) => void
+  onImageLoaded: (image: HTMLImageElement, fileName: string) => void
+  onImageClear: () => void
+  onError: (message: string) => void
 }
 
 type PreparedImage = {
@@ -91,7 +99,7 @@ function drawImageDataToCanvas(canvas: HTMLCanvasElement, imageData: ImageData):
   context.putImageData(imageData, 0, 0)
 }
 
-export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasReady }: PreviewCanvasProps) {
+export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasReady, onImageLoaded, onImageClear, onError }: PreviewCanvasProps) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -104,6 +112,8 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
   const [displaySize, setDisplaySize] = useState<DisplaySize | null>(null)
   const [webglEnabled, setWebglEnabled] = useState(false)
   const [comparePosition, setComparePosition] = useState(0.5)
+  const [isDragging, setIsDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     exportCanvasRef.current = document.createElement('canvas')
@@ -302,12 +312,61 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     })
   }, [preparedImage, lut, safeIntensity, compareMode, comparePosition])
 
+  const loadFile = useCallback((file: File) => {
+    if (!isAcceptedImage(file)) {
+      onError('请选择 jpg、jpeg、png 或 webp 格式的图片。')
+      return
+    }
+
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      onImageLoaded(img, file.name)
+    }
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      onError('无法加载这张图片，请换一张图片重试。')
+    }
+
+    img.src = url
+  }, [onImageLoaded, onError])
+
+  const handleFiles = useCallback((files: FileList | null) => {
+    const file = files?.[0]
+    if (file) {
+      loadFile(file)
+    }
+  }, [loadFile])
+
   if (!image) {
     return (
-      <div className="empty-preview">
+      <div
+        className={`preview-drop-zone ${isDragging ? 'is-dragging' : ''}`}
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault()
+          setIsDragging(true)
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault()
+          setIsDragging(false)
+          handleFiles(event.dataTransfer.files)
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+          onChange={(event) => handleFiles(event.currentTarget.files)}
+        />
         <span className="empty-icon codicon codicon-empty-window" aria-hidden="true" />
-        <strong>尚未加载图片</strong>
-        <span>上传图片后即可预览 LUT 滤镜效果。</span>
+        <strong>拖入或选择图片</strong>
+        <span>上传图片后即可预览 LUT 滤镜效果</span>
       </div>
     )
   }
@@ -323,6 +382,14 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
         }}
       >
         <canvas ref={canvasRef} aria-label="图片预览画布" />
+        <button
+          type="button"
+          className="preview-close-btn"
+          title="关闭图片"
+          onClick={onImageClear}
+        >
+          <span className="codicon codicon-chrome-close" aria-hidden="true" />
+        </button>
         <div className="render-badge">{webglEnabled ? 'WebGL2' : 'Worker'}</div>
         {compareMode && lut ? (
           <>

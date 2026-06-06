@@ -125,18 +125,6 @@ function App() {
 
       <div className="workspace">
         <aside className="sidebar">
-          <ImageUploader
-            label="原图"
-            title="拖入或选择原图"
-            fileName={imageName || undefined}
-            onImageLoaded={(loadedImage, fileName) => {
-              setImage(loadedImage)
-              setImageName(fileName)
-              setError('')
-            }}
-            onError={setError}
-          />
-
           <div className="tab-bar" role="tablist">
             <button
               type="button"
@@ -240,6 +228,16 @@ function App() {
             intensity={intensity}
             compareMode={compareMode}
             onCanvasReady={handleCanvasReady}
+            onImageLoaded={(loadedImage, fileName) => {
+              setImage(loadedImage)
+              setImageName(fileName)
+              setError('')
+            }}
+            onImageClear={() => {
+              setImage(null)
+              setImageName('')
+            }}
+            onError={setError}
           />
         </section>
       </div>
