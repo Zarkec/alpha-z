@@ -215,7 +215,7 @@ function App() {
               <ExportButton getCanvas={() => canvasRef.current} disabled={!image} />
             </>
           ) : (
-            <section className="generator-panel">
+            <>
               <ImageUploader
                 label="效果图"
                 title="拖入或选择滤镜效果图"
@@ -251,7 +251,7 @@ function App() {
                   重新下载生成的 CUBE
                 </button>
               ) : null}
-            </section>
+            </>
           )}
 
           {error ? <div className="error-message">{error}</div> : null}
