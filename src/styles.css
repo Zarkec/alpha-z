@@ -115,6 +115,48 @@ input {
   background: #4b6486;
 }
 
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #263244;
+}
+
+.tab-button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: #7d8da0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.tab-button .codicon {
+  font-size: 15px;
+}
+
+.tab-button:hover {
+  color: #c7d2e2;
+  background: #161f2d;
+}
+
+.tab-button.active {
+  border-bottom-color: #58a6ff;
+  color: #f1f6ff;
+  background: #141c28;
+}
+
 .upload-zone {
   display: grid;
   gap: 6px;

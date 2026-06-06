@@ -77,6 +77,7 @@ function App() {
   const [generatedLutSize, setGeneratedLutSize] = useState(16)
   const [intensity, setIntensity] = useState(100)
   const [compareMode, setCompareMode] = useState(false)
+  const [activeTab, setActiveTab] = useState<'preview' | 'generate'>('preview')
   const [error, setError] = useState<string>('')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -135,111 +136,125 @@ function App() {
             onError={setError}
           />
 
-          <LutUploader
-            onLutLoaded={(loadedLut, fileName) => {
-              setLut(loadedLut)
-              setLutName(fileName)
-              setGeneratedCubeText('')
-              setError('')
-            }}
-            onError={setError}
-          />
-
-          <section className="generator-panel">
-            <h2>
-              <span className="codicon codicon-symbol-color" aria-hidden="true" />
-              从效果图生成 CUBE
-            </h2>
-            <ImageUploader
-              label="效果图"
-              title="拖入或选择滤镜效果图"
-              helper="需与原图为同一画面"
-              iconClass="codicon-preview"
-              onImageLoaded={(loadedImage, fileName) => {
-                setFilteredReferenceImage(loadedImage)
-                setFilteredReferenceName(fileName)
-                setError('')
-              }}
-              onError={setError}
-            />
-            <label className="generator-size">
-              <span>生成尺寸</span>
-              <select
-                value={generatedLutSize}
-                onChange={(event) => setGeneratedLutSize(Number(event.currentTarget.value))}
-              >
-                <option value={16}>16 x 16 x 16</option>
-                <option value={32}>32 x 32 x 32</option>
-              </select>
-            </label>
-            <button className="secondary-button" type="button" disabled={!image || !filteredReferenceImage} onClick={generateCubeFromPair}>
-              <span className="codicon codicon-export" aria-hidden="true" />
-              生成并下载 CUBE
+          <div className="tab-bar" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              className={`tab-button${activeTab === 'preview' ? ' active' : ''}`}
+              onClick={() => { setActiveTab('preview'); setError('') }}
+            >
+              <span className="codicon codicon-eye" aria-hidden="true" />
+              滤镜预览
             </button>
-            {generatedCubeText ? (
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => downloadTextFile(generatedCubeText, 'alpha-z-generated.cube', 'text/plain;charset=utf-8')}
-              >
-                重新下载生成的 CUBE
-              </button>
-            ) : null}
-          </section>
-
-          {error ? <div className="error-message">{error}</div> : null}
-
-          <div className="file-info">
-            <div>
-              <span>
-                <span className="codicon codicon-file-media" aria-hidden="true" />
-                原图
-              </span>
-              <strong title={imageName || undefined}>{imageName || '未加载'}</strong>
-            </div>
-            <div>
-              <span>
-                <span className="codicon codicon-preview" aria-hidden="true" />
-                效果图
-              </span>
-              <strong title={filteredReferenceName || undefined}>{filteredReferenceName || '未加载'}</strong>
-            </div>
-            <div>
-              <span>
-                <span className="codicon codicon-symbol-color" aria-hidden="true" />
-                LUT
-              </span>
-              <strong title={lutName || undefined}>{lutName || '仅显示原图'}</strong>
-            </div>
-            {lut ? (
-              <div>
-                <span>
-                  <span className="codicon codicon-settings-gear" aria-hidden="true" />
-                  LUT 尺寸
-                </span>
-                <strong>
-                  {lut.size} x {lut.size} x {lut.size}
-                </strong>
-              </div>
-            ) : null}
+            <button
+              type="button"
+              role="tab"
+              className={`tab-button${activeTab === 'generate' ? ' active' : ''}`}
+              onClick={() => { setActiveTab('generate'); setError('') }}
+            >
+              <span className="codicon codicon-symbol-color" aria-hidden="true" />
+              生成 CUBE
+            </button>
           </div>
 
-          <IntensitySlider value={intensity} onChange={setIntensity} disabled={!image || !lut} />
+          {activeTab === 'preview' ? (
+            <>
+              <LutUploader
+                onLutLoaded={(loadedLut, fileName) => {
+                  setLut(loadedLut)
+                  setLutName(fileName)
+                  setGeneratedCubeText('')
+                  setError('')
+                }}
+                onError={setError}
+              />
 
-          <label className="toggle-row">
-            <input
-              type="checkbox"
-              checked={compareMode}
-              disabled={!image || !lut}
-              onChange={(event) => setCompareMode(event.currentTarget.checked)}
-            />
-            <span className="toggle-label">
-              <span className="codicon codicon-compare-changes" aria-hidden="true" />
-              对比原图 / 滤镜效果
-            </span>
-          </label>
+              <div className="file-info">
+                <div>
+                  <span>
+                    <span className="codicon codicon-file-media" aria-hidden="true" />
+                    原图
+                  </span>
+                  <strong title={imageName || undefined}>{imageName || '未加载'}</strong>
+                </div>
+                <div>
+                  <span>
+                    <span className="codicon codicon-symbol-color" aria-hidden="true" />
+                    LUT
+                  </span>
+                  <strong title={lutName || undefined}>{lutName || '未加载'}</strong>
+                </div>
+                {lut ? (
+                  <div>
+                    <span>
+                      <span className="codicon codicon-settings-gear" aria-hidden="true" />
+                      LUT 尺寸
+                    </span>
+                    <strong>
+                      {lut.size} x {lut.size} x {lut.size}
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
 
-          <ExportButton getCanvas={() => canvasRef.current} disabled={!image} />
+              <IntensitySlider value={intensity} onChange={setIntensity} disabled={!image || !lut} />
+
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={compareMode}
+                  disabled={!image || !lut}
+                  onChange={(event) => setCompareMode(event.currentTarget.checked)}
+                />
+                <span className="toggle-label">
+                  <span className="codicon codicon-compare-changes" aria-hidden="true" />
+                  对比原图 / 滤镜效果
+                </span>
+              </label>
+
+              <ExportButton getCanvas={() => canvasRef.current} disabled={!image} />
+            </>
+          ) : (
+            <section className="generator-panel">
+              <ImageUploader
+                label="效果图"
+                title="拖入或选择滤镜效果图"
+                helper="需与原图为同一画面"
+                iconClass="codicon-preview"
+                onImageLoaded={(loadedImage, fileName) => {
+                  setFilteredReferenceImage(loadedImage)
+                  setFilteredReferenceName(fileName)
+                  setError('')
+                }}
+                onError={setError}
+              />
+              <label className="generator-size">
+                <span>生成尺寸</span>
+                <select
+                  value={generatedLutSize}
+                  onChange={(event) => setGeneratedLutSize(Number(event.currentTarget.value))}
+                >
+                  <option value={16}>16 x 16 x 16</option>
+                  <option value={32}>32 x 32 x 32</option>
+                </select>
+              </label>
+              <button className="secondary-button" type="button" disabled={!image || !filteredReferenceImage} onClick={generateCubeFromPair}>
+                <span className="codicon codicon-export" aria-hidden="true" />
+                生成并下载 CUBE
+              </button>
+              {generatedCubeText ? (
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => downloadTextFile(generatedCubeText, 'alpha-z-generated.cube', 'text/plain;charset=utf-8')}
+                >
+                  重新下载生成的 CUBE
+                </button>
+              ) : null}
+            </section>
+          )}
+
+          {error ? <div className="error-message">{error}</div> : null}
         </aside>
 
         <section className="preview-panel">
