@@ -32,15 +32,6 @@ body {
   min-height: 100vh;
   overflow: hidden;
   background: var(--paper);
-  /* 横线纸背景 */
-  background-image:
-    repeating-linear-gradient(
-      transparent,
-      transparent 31px,
-      var(--paper-ruled) 31px,
-      var(--paper-ruled) 32px
-    );
-  background-position: 0 14px;
 }
 
 button,
@@ -89,7 +80,15 @@ select {
   flex-direction: column;
   height: 100%;
   padding: 24px 28px;
-  overflow: hidden;
+  overflow-y: auto;
+  /* 横线纸背景 */
+  background-image:
+    repeating-linear-gradient(
+      transparent,
+      transparent 35px,
+      var(--paper-ruled) 35px,
+      var(--paper-ruled) 36px
+    );
 }
 
 .app-header {
