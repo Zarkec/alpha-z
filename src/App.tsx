@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useState } from 'react'
 import { ExportButton } from './components/ExportButton'
 import { ImageUploader } from './components/ImageUploader'
 import { IntensitySlider } from './components/IntensitySlider'
@@ -79,11 +79,6 @@ function App() {
   const [compareMode, setCompareMode] = useState(false)
   const [activeTab, setActiveTab] = useState<'preview' | 'generate'>('preview')
   const [error, setError] = useState<string>('')
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-
-  const handleCanvasReady = useCallback((canvas: HTMLCanvasElement | null) => {
-    canvasRef.current = canvas
-  }, [])
 
   const generateCubeFromPair = () => {
     if (!image || !filteredReferenceImage) {
@@ -175,7 +170,14 @@ function App() {
                 </span>
               </label>
 
-              <ExportButton getCanvas={() => canvasRef.current} disabled={!image} />
+              <ExportButton
+                image={image}
+                imageName={imageName}
+                lut={lut}
+                intensity={intensity}
+                disabled={!image}
+                onError={setError}
+              />
             </>
           ) : (
             <>
@@ -227,7 +229,6 @@ function App() {
             lut={lut}
             intensity={intensity}
             compareMode={compareMode}
-            onCanvasReady={handleCanvasReady}
             onImageLoaded={(loadedImage, fileName) => {
               setImage(loadedImage)
               setImageName(fileName)

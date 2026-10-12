@@ -14,7 +14,6 @@ type PreviewCanvasProps = {
   lut: CubeLUT | null
   intensity: number
   compareMode: boolean
-  onCanvasReady: (canvas: HTMLCanvasElement | null) => void
   onImageLoaded: (image: HTMLImageElement, fileName: string) => void
   onImageClear: () => void
   onError: (message: string) => void
@@ -31,29 +30,13 @@ type DisplaySize = {
   height: number
 }
 
-type WorkerResultMessage = {
-  type: 'result'
+type WorkerPreviewMessage = {
+  type: 'preview'
   jobId: number
-  exportImageData: ImageData
-  previewImageData?: ImageData
+  previewImageData: ImageData
 }
 
-type WorkerErrorMessage = {
-  type: 'error'
-  jobId?: number
-  message: string
-}
-
-type WorkerMessage = WorkerResultMessage | WorkerErrorMessage | { type: 'ready' }
-
-type WorkerRequestCache = {
-  preparedImage: PreparedImage
-  lut: CubeLUT | null
-  intensity: number
-  compareMode: boolean
-  comparePosition: number
-  includePreview: boolean
-}
+type WorkerMessage = WorkerPreviewMessage | { type: 'error'; jobId?: number; message: string } | { type: 'ready' }
 
 function getScaledSize(width: number, height: number): { width: number; height: number } {
   const maxEdge = Math.max(width, height)
@@ -99,27 +82,26 @@ function drawImageDataToCanvas(canvas: HTMLCanvasElement, imageData: ImageData):
   context.putImageData(imageData, 0, 0)
 }
 
-export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasReady, onImageLoaded, onImageClear, onError }: PreviewCanvasProps) {
+export function PreviewCanvas({ image, lut, intensity, compareMode, onImageLoaded, onImageClear, onError }: PreviewCanvasProps) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const exportCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const rendererRef = useRef<WebGLLutRenderer | null>(null)
   const workerRef = useRef<Worker | null>(null)
   const latestJobIdRef = useRef(0)
-  const lastWorkerRequestRef = useRef<WorkerRequestCache | null>(null)
+  const lastPreviewRequestRef = useRef<{
+    preparedImage: PreparedImage
+    lut: CubeLUT | null
+    intensity: number
+    compareMode: boolean
+    comparePosition: number
+  } | null>(null)
   const [preparedImage, setPreparedImage] = useState<PreparedImage | null>(null)
   const [displaySize, setDisplaySize] = useState<DisplaySize | null>(null)
   const [webglEnabled, setWebglEnabled] = useState(false)
   const [comparePosition, setComparePosition] = useState(0.5)
   const [isDragging, setIsDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    exportCanvasRef.current = document.createElement('canvas')
-    onCanvasReady(exportCanvasRef.current)
-    return () => onCanvasReady(null)
-  }, [onCanvasReady])
 
   useEffect(() => {
     if (!image) {
@@ -129,8 +111,13 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
       return
     }
 
-    setPreparedImage(prepareImageData(image))
-  }, [image])
+    try {
+      setPreparedImage(prepareImageData(image))
+    } catch (error) {
+      onError(error instanceof Error ? error.message : '无法读取这张图片。')
+      setPreparedImage(null)
+    }
+  }, [image, onError])
 
   useEffect(() => {
     const shell = shellRef.current
@@ -176,8 +163,7 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const exportCanvas = exportCanvasRef.current
-    if (!canvas || !exportCanvas || !preparedImage) {
+    if (!canvas || !preparedImage) {
       return
     }
 
@@ -185,13 +171,12 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     rendererRef.current = null
     workerRef.current?.terminate()
     workerRef.current = null
-    lastWorkerRequestRef.current = null
+    lastPreviewRequestRef.current = null
     setWebglEnabled(false)
 
-    drawImageDataToCanvas(exportCanvas, preparedImage.imageData)
-
+    let renderer: WebGLLutRenderer | null = null
     try {
-      const renderer = new WebGLLutRenderer(canvas)
+      renderer = new WebGLLutRenderer(canvas)
       renderer.setImage(preparedImage.imageData)
       renderer.setLut(lut)
       renderer.render(Math.min(1, Math.max(0, intensity / 100)), compareMode, comparePosition)
@@ -209,16 +194,18 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const message = event.data
 
-      if (message.type === 'result') {
+      if (message.type === 'preview') {
         if (message.jobId !== latestJobIdRef.current) {
           return
         }
 
-        drawImageDataToCanvas(exportCanvas, message.exportImageData)
-
-        if (!rendererRef.current && message.previewImageData) {
+        if (!rendererRef.current) {
           drawImageDataToCanvas(canvas, message.previewImageData)
         }
+      }
+
+      if (message.type === 'error') {
+        onError(message.message)
       }
     }
 
@@ -230,6 +217,8 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
       rendererRef.current?.dispose()
       rendererRef.current = null
     }
+    // 仅在图片本身变化时重建渲染上下文；LUT 与强度变化走下面的增量更新。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preparedImage])
 
   const safeIntensity = useMemo(() => Math.min(1, Math.max(0, intensity / 100)), [intensity])
@@ -271,44 +260,39 @@ export function PreviewCanvas({ image, lut, intensity, compareMode, onCanvasRead
       renderer.render(safeIntensity, compareMode, comparePosition)
     }
 
+    // WebGL 可用时预览已经在 GPU 上完成，Worker 只在回退路径上需要参与。
     const worker = workerRef.current
-    if (!worker) {
+    if (!worker || renderer) {
       return
     }
 
-    const includePreview = !renderer
-    const lastWorkerRequest = lastWorkerRequestRef.current
-    const exportUnchanged =
-      lastWorkerRequest?.preparedImage === preparedImage &&
-      lastWorkerRequest.lut === lut &&
-      lastWorkerRequest.intensity === safeIntensity
-    const previewUnchanged =
-      !includePreview ||
-      (lastWorkerRequest?.includePreview === includePreview &&
-        lastWorkerRequest.compareMode === compareMode &&
-        lastWorkerRequest.comparePosition === comparePosition)
+    const lastRequest = lastPreviewRequestRef.current
+    const unchanged =
+      lastRequest?.preparedImage === preparedImage &&
+      lastRequest.lut === lut &&
+      lastRequest.intensity === safeIntensity &&
+      lastRequest.compareMode === compareMode &&
+      lastRequest.comparePosition === comparePosition
 
-    if (exportUnchanged && previewUnchanged) {
+    if (unchanged) {
       return
     }
 
     latestJobIdRef.current += 1
-    lastWorkerRequestRef.current = {
+    lastPreviewRequestRef.current = {
       preparedImage,
       lut,
       intensity: safeIntensity,
       compareMode,
       comparePosition,
-      includePreview,
     }
     worker.postMessage({
-      type: 'process',
+      type: 'preview',
       jobId: latestJobIdRef.current,
       lut,
       intensity: safeIntensity,
       compareMode,
       comparePosition,
-      includePreview,
     })
   }, [preparedImage, lut, safeIntensity, compareMode, comparePosition])
 

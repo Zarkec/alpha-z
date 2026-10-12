@@ -438,6 +438,53 @@ select {
   accent-color: var(--ink-blue);
 }
 
+/* ── Export panel ── */
+
+.export-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.format-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.format-option {
+  min-height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.format-option:hover:not(:disabled) {
+  background: var(--ink-pencil);
+}
+
+.format-option.active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.format-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.export-hint {
+  color: var(--ink-pencil);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 /* ── Buttons ── */
 
 .primary-button,

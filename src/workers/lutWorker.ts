@@ -6,27 +6,37 @@ type InitMessage = {
   imageData: ImageData
 }
 
-type ProcessMessage = {
-  type: 'process'
+type PreviewMessage = {
+  type: 'preview'
   jobId: number
   lut: CubeLUT | null
   intensity: number
   compareMode: boolean
   comparePosition: number
-  includePreview: boolean
 }
 
-type WorkerRequest = InitMessage | ProcessMessage
+type ExportMessage = {
+  type: 'export'
+  jobId: number
+  lut: CubeLUT | null
+  intensity: number
+}
+
+type WorkerRequest = InitMessage | PreviewMessage | ExportMessage
 
 type WorkerResponse =
   | {
       type: 'ready'
     }
   | {
-      type: 'result'
+      type: 'preview'
+      jobId: number
+      previewImageData: ImageData
+    }
+  | {
+      type: 'export'
       jobId: number
       exportImageData: ImageData
-      previewImageData?: ImageData
     }
   | {
       type: 'error'
@@ -72,9 +82,9 @@ function postResponse(response: WorkerResponse): void {
 }
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
-  try {
-    const message = event.data
+  const message = event.data
 
+  try {
     if (message.type === 'init') {
       sourceImageData = message.imageData
       postResponse({ type: 'ready' })
@@ -86,26 +96,30 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       return
     }
 
-    const exportImageData = message.lut
+    // 预览和导出拆成两种任务：滑块拖动只需要预览，全图导出只在用户点击时发生。
+    if (message.type === 'export') {
+      const exportImageData = message.lut
+        ? applyLUTToImageData(sourceImageData, message.lut, message.intensity)
+        : cloneImageData(sourceImageData)
+
+      postResponse({ type: 'export', jobId: message.jobId, exportImageData })
+      return
+    }
+
+    const filtered = message.lut
       ? applyLUTToImageData(sourceImageData, message.lut, message.intensity)
       : cloneImageData(sourceImageData)
 
     const previewImageData =
-      message.includePreview && message.compareMode && message.lut
-        ? createComparePreview(sourceImageData, exportImageData, message.comparePosition)
-        : message.includePreview
-          ? cloneImageData(exportImageData)
-          : undefined
+      message.compareMode && message.lut
+        ? createComparePreview(sourceImageData, filtered, message.comparePosition)
+        : filtered
 
-    postResponse({
-      type: 'result',
-      jobId: message.jobId,
-      exportImageData,
-      previewImageData,
-    })
+    postResponse({ type: 'preview', jobId: message.jobId, previewImageData })
   } catch (error) {
     postResponse({
       type: 'error',
+      jobId: 'jobId' in message ? message.jobId : undefined,
       message: error instanceof Error ? error.message : 'Worker 处理图片失败。',
     })
   }
