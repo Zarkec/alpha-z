@@ -21,6 +21,8 @@ uniform bool u_hasLut;
 uniform bool u_compareMode;
 uniform float u_comparePosition;
 uniform vec2 u_resolution;
+uniform vec3 u_domainMin;
+uniform vec3 u_domainMax;
 
 in vec2 v_texCoord;
 out vec4 outColor;
@@ -34,7 +36,9 @@ vec3 readLutNode(float r, float g, float b) {
 
 vec3 sampleLut(vec3 color) {
   float size = u_lutSize;
-  vec3 scaled = clamp(color, 0.0, 1.0) * (size - 1.0);
+  // 与 CPU 侧的 normalizeChannel 保持一致：先按 DOMAIN 归一化再定位 LUT 节点。
+  vec3 normalized = clamp((color - u_domainMin) / max(u_domainMax - u_domainMin, vec3(0.000001)), 0.0, 1.0);
+  vec3 scaled = normalized * (size - 1.0);
   vec3 base = floor(scaled);
   vec3 nextNode = min(base + 1.0, vec3(size - 1.0));
   vec3 fraction = scaled - base;
@@ -135,6 +139,8 @@ export class WebGLLutRenderer {
   private vao: WebGLVertexArrayObject
   private lutSize = 2
   private hasLut = false
+  private domainMin: [number, number, number] = [0, 0, 0]
+  private domainMax: [number, number, number] = [1, 1, 1]
   private uniformLocations: {
     image: WebGLUniformLocation
     lut: WebGLUniformLocation
@@ -144,6 +150,8 @@ export class WebGLLutRenderer {
     compareMode: WebGLUniformLocation
     comparePosition: WebGLUniformLocation
     resolution: WebGLUniformLocation
+    domainMin: WebGLUniformLocation
+    domainMax: WebGLUniformLocation
   }
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -190,6 +198,8 @@ export class WebGLLutRenderer {
       compareMode: this.getUniformLocation('u_compareMode'),
       comparePosition: this.getUniformLocation('u_comparePosition'),
       resolution: this.getUniformLocation('u_resolution'),
+      domainMin: this.getUniformLocation('u_domainMin'),
+      domainMax: this.getUniformLocation('u_domainMax'),
     }
   }
 
@@ -217,6 +227,8 @@ export class WebGLLutRenderer {
 
     this.hasLut = true
     this.lutSize = lut.size
+    this.domainMin = lut.domainMin
+    this.domainMax = lut.domainMax
 
     const rgba = new Uint8Array(lut.size * lut.size * lut.size * 4)
     for (let sourceIndex = 0, targetIndex = 0; sourceIndex < lut.data.length; sourceIndex += 3, targetIndex += 4) {
@@ -255,6 +267,18 @@ export class WebGLLutRenderer {
     gl.uniform1i(this.uniformLocations.compareMode, compareMode && this.hasLut ? 1 : 0)
     gl.uniform1f(this.uniformLocations.comparePosition, Math.min(1, Math.max(0, comparePosition)))
     gl.uniform2f(this.uniformLocations.resolution, this.canvas.width, this.canvas.height)
+    gl.uniform3f(
+      this.uniformLocations.domainMin,
+      this.domainMin[0],
+      this.domainMin[1],
+      this.domainMin[2],
+    )
+    gl.uniform3f(
+      this.uniformLocations.domainMax,
+      this.domainMax[0],
+      this.domainMax[1],
+      this.domainMax[2],
+    )
 
     gl.drawArrays(gl.TRIANGLES, 0, 6)
     gl.bindVertexArray(null)

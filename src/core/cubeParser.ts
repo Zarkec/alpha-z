@@ -53,9 +53,21 @@ export function parseCube(text: string): CubeLUT {
   let size: number | undefined
   let domainMin: RGBTuple = [0, 0, 0]
   let domainMax: RGBTuple = [1, 1, 1]
-  const values: number[] = []
+  let expectedValueCount: number | undefined
+  let data: Float32Array | undefined
+  let writeIndex = 0
 
   const lines = text.split(/\r?\n/)
+
+  const ensureDataBuffer = (): Float32Array => {
+    if (!data && expectedValueCount !== undefined) {
+      data = new Float32Array(expectedValueCount)
+    }
+    if (!data) {
+      throw new Error('缺少必需的 LUT_3D_SIZE 声明。')
+    }
+    return data
+  }
 
   for (let i = 0; i < lines.length; i += 1) {
     const lineNumber = i + 1
@@ -84,6 +96,10 @@ export function parseCube(text: string): CubeLUT {
       }
 
       size = parsedSize
+      expectedValueCount = parsedSize * parsedSize * parsedSize * 3
+      // LUT_3D_SIZE 之后的行都是数据行，尺寸确定后即可预分配并原地写入。
+      data = undefined
+      writeIndex = 0
       continue
     }
 
@@ -98,11 +114,18 @@ export function parseCube(text: string): CubeLUT {
     }
 
     if (parts.length === 3) {
-      values.push(
-        parseFloatToken(parts[0], lineNumber),
-        parseFloatToken(parts[1], lineNumber),
-        parseFloatToken(parts[2], lineNumber),
-      )
+      const buffer = ensureDataBuffer()
+
+      if (writeIndex + 3 > buffer.length) {
+        throw new Error(
+          `第 ${lineNumber} 行：LUT 数据超出尺寸 ${size} 声明的容量，请检查 LUT_3D_SIZE 是否与数据行数一致。`,
+        )
+      }
+
+      buffer[writeIndex] = parseFloatToken(parts[0], lineNumber)
+      buffer[writeIndex + 1] = parseFloatToken(parts[1], lineNumber)
+      buffer[writeIndex + 2] = parseFloatToken(parts[2], lineNumber)
+      writeIndex += 3
       continue
     }
 
@@ -119,10 +142,9 @@ export function parseCube(text: string): CubeLUT {
     }
   }
 
-  const expectedValueCount = size * size * size * 3
-  if (values.length !== expectedValueCount) {
+  if (writeIndex !== expectedValueCount) {
     throw new Error(
-      `LUT 数据数量不正确：尺寸 ${size} 需要 ${expectedValueCount} 个浮点数，实际读取到 ${values.length} 个。`,
+      `LUT 数据数量不正确：尺寸 ${size} 需要 ${expectedValueCount} 个浮点数，实际读取到 ${writeIndex} 个。`,
     )
   }
 
@@ -131,6 +153,6 @@ export function parseCube(text: string): CubeLUT {
     size,
     domainMin,
     domainMax,
-    data: new Float32Array(values),
+    data: data ?? new Float32Array(0),
   }
 }
