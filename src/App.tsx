@@ -109,12 +109,16 @@ function App() {
   return (
     <main className="app">
       <header className="app-header">
-        <div>
+        <div className="brand-group">
           <h1>
             <span className="codicon codicon-symbol-color" aria-hidden="true" />
             alpha-z
           </h1>
           <p>浏览器端 LUT 滤镜编辑器</p>
+        </div>
+        <div className="header-badge">
+          <span className="codicon codicon-shield" aria-hidden="true" />
+          <span>本地离线 GPU 加速</span>
         </div>
       </header>
 
